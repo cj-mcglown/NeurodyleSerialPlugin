@@ -1,0 +1,7 @@
+{
+  "name": "seriltestapp",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}
