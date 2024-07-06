@@ -12,6 +12,11 @@
       <ion-title size="large">Tab 1</ion-title>
     </ion-toolbar>
   </ion-header>
+  
+  <!-- <button (click)="requestPermission()">Permissions</button><br> -->
+  <button style="width: 100%; height: 25px;" (click)="openSerial()">open serial</button> <br>
+  <button  style="width: 100%; height: 25px;"  (click)="read()">read callback</button> <br>
+  <button  style="width: 100%; height: 25px;"  (click)="readSingle()">read single</button> <br>
   platformReadyValue: {{platformReady}}<br>
   datavals:  {{datavals}}<br>
 
@@ -22,8 +27,8 @@
   {{devicesResponse | json}}
 
 
-  <button (click)="getPermission()">start</button><br>
-  <button (click)="getPermissionReal()">open serial</button> <br>
-  <button (click)="read()">read</button> <br>
+  
+
+  requestPermission
   <!-- <app-explore-container name="Tab 1 page"></app-explore-container> -->
 </ion-content>
