@@ -37,6 +37,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+
+// brent - USB stuff
+import android.app.AlertDialog;
+// import android.hardware.usb.UsbManager;
+// import android.hardware.usb.UsbDevice;
+// import android.content.BroadcastReceiver;
+// import android.content.IntentFilter;
+// import android.app.PendingIntent;
+import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
+
+
 public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
     private final Context context;
     // call that will be used to send back usb device attached/detached event
@@ -48,9 +60,11 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
 //    private PluginCall openSerialCall;
 
     // usb permission tag name
-    public static final String USB_PERMISSION = "com.viewtrak.plugins.usbserial.USB_PERMISSION";
-    private static final int WRITE_WAIT_MILLIS = 2000;
+    // public static final String USB_PERMISSION = "com.viewtrak.plugins.usbserial.USB_PERMISSION";
+    private static final int WRITE_WAIT_MILLIS = 2000; // brent - these are kind of strange; maybe the read call should pass in this value (time) or number of bytes to read?
     private static final int READ_WAIT_MILLIS = 2000;
+
+    
 
     private enum UsbPermission {Unknown, Requested, Granted, Denied}
 
@@ -70,6 +84,38 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
     // USB permission broadcastreceiver
     private final Handler mainLooper;
     String messageNMEA = "";
+
+
+    // brent - custom USB permission handler
+    UsbDevice device;
+    private static final String ACTION_USB_PERMISSION =  "com.neurodyne.seizuresense.USB_PERMISSION";
+    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (ACTION_USB_PERMISSION.equals(action)) {
+                synchronized (this) {
+                    UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        if(device != null){
+                            // call method to set up device communication
+                            Log.d("NeuroSerial", "USB device " + device);
+                            if (callback != null) {
+                                callback.receivedMsg("READY"); // brent - let the client know the device is connected
+                            }
+                        }
+                    }
+                    else {
+                        Log.d("NeuroSerial", "permission denied for device " + device);
+                        if (callback != null) {
+                            callback.receivedMsg("PERMISSION_DENIED"); // brent - let the client know the permissions were denied
+                        }
+                    }
+                }
+            }
+        }
+    };
 
 
 //    private RateLimiter throttle = RateLimiter.create(1.0);
@@ -99,6 +145,11 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
                 if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
                     UsbDevice usbDevice = (UsbDevice) intent.getParcelableExtra("device");
                     callback.usbDeviceDetached(usbDevice);
+
+                    // brent - let the client know the device was disconnected
+                    if (callback != null) {
+                        callback.receivedMsg("NO_DEVICE");
+                    }
                 }
             }
         }, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED));
@@ -141,107 +192,132 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
         usbSerialPort = null;
     }
 
-    public void openSerial(UsbSerialOptions settings) {
+    // brent - add separate permission request method for calling from the js client
+    public void requestPermissions() {
         try {
+            UsbManager m_usbManager = (UsbManager) this.context.getSystemService(Context.USB_SERVICE);
+            PendingIntent permissionIntent = PendingIntent.getBroadcast(this.context, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_MUTABLE); //PendingIntent.FLAG_IMMUTABLE);
+            IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+            this.context.registerReceiver(usbReceiver, filter);
+
+            HashMap<String, UsbDevice> deviceList = m_usbManager.getDeviceList();
+            Log.d("NeuroSerial", "Devices = " + deviceList.keySet()); // Devices = [/dev/bus/usb/002/002]
+
+            if (!deviceList.isEmpty()) {
+                // for phones, expect only 1 device to be connected so just use the first one...
+                device = (UsbDevice) deviceList.values().toArray()[0]; // [0]; // "/dev/bus/usb/002/002"); // device = deviceList.get("Espressif Device");
+
+                String deviceInfo = "Device Name:" + device.getDeviceName() + " | Device Id:" + device.getDeviceId() + " | Vendor Id:" + device.getVendorId() + " | Product Id:" + device.getProductId();
+                Log.d("NeuroSerial", "Current device = " + deviceInfo);
+                Log.d("NeuroSerial", "Full Device Info = " + device);
+
+                if (!m_usbManager.hasPermission(device)) {
+                    if (device != null) {
+                        m_usbManager.requestPermission(device, permissionIntent);
+                    }
+                }
+                else {
+                    // device is ready!
+                    callback.receivedMsg("READY");
+                }
+            }
+            else {
+                // no USB device connection detected
+                callback.receivedMsg("NO_DEVICE");
+            }
+        }
+        catch (Exception exception) {
+            throw new Error(exception.getMessage(), exception.getCause());
+        }
+
+    }
+
+    public Boolean openSerial(UsbSerialOptions settings) {
+        try {
+            Log.w("NeuroSerial", "Trying to open serial comms...");
+
             closeSerial();
 
-
-
             // Sleep On Pause defaults to true
-//            this.sleepOnPause = openSerialCall.hasOption("sleepOnPause") ? openSerialCall.getBoolean("sleepOnPause") : true;
-            Log.w("NeuroSerial", "Neurodyne Message: 1");
+            // this.sleepOnPause = openSerialCall.hasOption("sleepOnPause") ? openSerialCall.getBoolean("sleepOnPause") : true;            
+
             UsbDevice device = null;
             UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
             for (UsbDevice v : usbManager.getDeviceList().values()) {
                 if (v.getDeviceId() == settings.deviceId)
                     device = v;
             }
+
+            if (device == null) {
+                // throw new Error("connection failed: device not found", new Throwable("connectionFailed:DeviceNotFound"));
+                if (callback != null) {
+                    callback.receivedMsg("NO_DEVICE");
+                }
+                return false;
+            }
+
             String deviceInfo = "Device Name:" + device.getDeviceName() + "Device Id:" + device.getDeviceId();
             Log.w("NeuroSerial", deviceInfo);
-            if (device == null) {
-                throw new Error("connection failed: device not found", new Throwable("connectionFailed:DeviceNotFound"));
-            }
+
             UsbSerialDriver driver = getProper().probeDevice(device);
             if (driver == null) {
                 // tyring custom
                 driver = getDriverClass(device);
             }
             if (driver == null) {
-                throw new Error("connection failed: no driver for device", new Throwable("connectionFailed:NoDriverForDevice"));
+                // throw new Error("connection failed: no driver for device", new Throwable("connectionFailed:NoDriverForDevice"));
+                if (callback != null) {
+                    callback.receivedMsg("NO_DEVICE");
+                }
+                return false;
             }
             if (driver.getPorts().size() < settings.portNum) {
-                throw new Error("connection failed: not enough ports at device", new Throwable("connectionFailed:NoAvailablePorts"));
+                // throw new Error("connection failed: not enough ports at device", new Throwable("connectionFailed:NoAvailablePorts"));
+                if (callback != null) {
+                    callback.receivedMsg("NO_DEVICE");
+                }
+                return false;
             }
 
-            Log.w("NeuroSerial", "Pre-Get Device");
             UsbDevice usbDev = driver.getDevice();
-            Log.w("NeuroSerial", "Post-Get Device");
+            if (usbDev == null) {
+                if (callback != null) {
+                    callback.receivedMsg("NO_DEVICE");
+                }
+                return false;
+            }
+
             String usbDevName = usbDev.getDeviceName();
             int usbDevId = usbDev.getDeviceId();
             String usbProductName = usbDev.getProductName();
-            int usbProductId = usbDev.getProductId();
-            Log.w("NeuroSerial", "Post-vars");
-            String deviceInfo2 = "Device Name:" + usbDevName + "Product Id:" + usbProductName + "Device Id:" + usbDevId + "Product Name:" + usbProductName;
+            int usbProductId = usbDev.getProductId();            
 
+            String deviceInfo2 = "Device Name:" + usbDevName + "Product Id:" + usbProductName + "Device Id:" + usbDevId + "Product Name:" + usbProductName;
             Log.w("NeuroSerial", deviceInfo);
 
-            Log.w("NeuroSerial", "pre-ports");
             usbSerialPort = driver.getPorts().get(settings.portNum);
             int portnumber = settings.portNum;
             Log.w("NeuroSerial", "post-ports" + " Port Number: " + portnumber);
 
-            UsbDevice usbdev = driver.getDevice();
-            String usbDevName1 = usbdev.getDeviceName();
-            int usbDevId1 = usbdev.getDeviceId();
-            String usbProductName1 = usbdev.getProductName();
-            int usbProductId1 = usbdev.getProductId();
-            Log.w("NeuroSerial", "Post-vars22");
-            String deviceInfo22 = "Device Name:" + usbDevName1 + "Product Id:" + usbProductName1 + "Device Id:" + usbDevId1 + "Product Name:" + usbProductName1;
-            Log.w("NeuroSerial", deviceInfo22);
+
+            // updateReadDataError(new Exception(deviceInfo22));
+            // updateReadDataError(new Exception(driver.getClass().getSimpleName()));
 
             UsbDeviceConnection usbConnection = usbManager.openDevice(driver.getDevice());
             if (usbConnection == null && usbPermission == UsbPermission.Unknown && !usbManager.hasPermission(driver.getDevice())) {
-           // if(true) {
-                Log.w("NeuroSerial", "permission block");
-                usbPermission = UsbPermission.Requested;
-                Log.w("NeuroSerial", "permission block 1");
-                PendingIntent usbPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(USB_PERMISSION), PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-                Log.w("NeuroSerial", "permission block 2");
-                context.registerReceiver(new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        Log.w("NeuroSerial", "Recieved");
-                        String action = intent.getAction();
-                        Log.w("NeuroSerial", "Action: " + action);
-                        if (USB_PERMISSION.equals(action)) {
-                            Log.w("NeuroSerial", "Recieved-granted");
-                            usbPermission = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                                    ? UsbPermission.Granted : UsbPermission.Denied;
-                            context.unregisterReceiver(this);
-                            openSerial(settings);
-                        }
-                    }
-                }, new IntentFilter(USB_PERMISSION), Context.RECEIVER_EXPORTED);
 
-                Log.w("NeuroSerial", "Pre-perms");
-                usbManager.requestPermission(driver.getDevice(), usbPermissionIntent);
-                Log.w("NeuroSerial", "post-perms");
-                //return;
-            }
-            Log.w("NeuroSerial", "Pre-usbconn");
-            Log.w("NeuroSerial", "" + (usbConnection == null) );
-        //    UsbDeviceConnection usbConnection = usbManager.openDevice(driver.getDevice());
-            Log.w("NeuroSerial", "Post-usbconn");
-            if (usbConnection == null) {
-                Log.w("NeuroSerial", "No-Perms");
-               // return;
-                if (!usbManager.hasPermission(driver.getDevice())) {
-                    //throw new Error("connection failed: permission denied", new Throwable("connectionFailed:UsbConnectionPermissionDenied"));
-                } else {
-                    throw new Error("connection failed: Serial open failed", new Throwable("connectionFailed:SerialOpenFailed"));
+                if (callback != null) {
+                    callback.receivedMsg("NO_DEVICE");
                 }
+                return false;
             }
-            Log.w("NeuroSerial", "Made-it");
+
+            if (usbConnection == null) {
+                if (callback != null) {
+                    callback.receivedMsg("NO_DEVICE");
+                }
+                return false;
+            }
 
             usbSerialPort.open(usbConnection);
             usbSerialPort.setParameters(settings.baudRate, settings.dataBits, settings.stopBits, settings.parity);
@@ -249,9 +325,11 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
             if (settings.rts) usbSerialPort.setRTS(true);
             usbIoManager = new SerialInputOutputManager(usbSerialPort, this);
             usbIoManager.start();
-           // connected = true;
+
             setConnectedDevice(device);
-            Log.w("NeuroSerial", "Bottom");
+
+            return true;
+
         } catch (Exception exception) {
             closeSerial();
             throw new Error(exception.getMessage(), exception.getCause());
@@ -306,25 +384,38 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
 //            disconnect();
 //        }
 //    }
+ 
 
+    // brent - data conversion to HEX for parsing on js app
+    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+    public static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
 
+    // brent - parse messageses coming from serial data based on our own spec (hard-coded)    
+    int frameSize = 2 * (4 + (32*2)); // HEX: 2 bytes per val => 2 x (4-byte header, 32 2-byte numbers) // int frameSize = (4 + (32*2)); // ASCII: 4 bytes per val => 4-byte header, 32 2-byte numbers
+    String eegMesssage = "";
+    String begin = "44415441"; // "DATA";
     private void updateReceivedData(byte[] data) {
         try {
-            messageNMEA += new String(data);
-
-            int eol = messageNMEA.indexOf(0x0a);
-            if (-1 != eol) {
-                String sentence = messageNMEA.substring(0, eol + 1);
-                messageNMEA = messageNMEA.substring(eol + 1);
-
-//                    Boolean allowed = throttle.tryAcquire();
-//                    if (!allowed) {
-//                        return;
-//                    }
-
-                callback.receivedData(sentence);
-            } else if (messageNMEA.length() > 128) {
-                throw new Exception("invalid NMEA string");
+            this.eegMesssage += bytesToHex(data); // new String(data, StandardCharsets.US_ASCII);   // .UTF_8);
+            if (this.eegMesssage.contains(this.begin) && this.eegMesssage.length() >= frameSize) {
+                int bol = this.eegMesssage.indexOf(this.begin);
+                if (this.eegMesssage.length() - bol >= frameSize) {
+                    String frame = this.eegMesssage.substring(bol, bol + frameSize);
+                    callback.receivedData(frame);
+                    this.eegMesssage = this.eegMesssage.substring(bol + frameSize);
+                }
+            }            
+            if (this.eegMesssage.length() >= 3 * frameSize) {
+                updateReadDataError(new Exception("(length=" + this.eegMesssage.length() + ") =>" + this.eegMesssage));
+                this.eegMesssage = "";
             }
         } catch (Exception exception) {
             updateReadDataError(exception);
@@ -437,6 +528,8 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
         customTable.addProduct(3368, 516, CdcAcmSerialDriver.class); // 0x0d28 / 0x0204: ARM mbed
         customTable.addProduct(1155, 22336, CdcAcmSerialDriver.class); // 0x0483 / 0x5740: ST CDC
 
+        customTable.addProduct(12346, 16385, CdcAcmSerialDriver.class); // 0x303A / 0x4001: ESP32 (NeuroDyne EEG)
+
         return new UsbSerialProber(customTable);
     }
 
@@ -455,21 +548,6 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
         }
         return  Utils.deviceListToJsonConvert(listItems);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     public String echo(String value) {
         Log.i("Echo", "cj" + value);
