@@ -196,7 +196,13 @@ public class NeurodyneUsbSerial  implements SerialInputOutputManager.Listener {
     public void requestPermissions() {
         try {
             UsbManager m_usbManager = (UsbManager) this.context.getSystemService(Context.USB_SERVICE);
-            PendingIntent permissionIntent = PendingIntent.getBroadcast(this.context, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_MUTABLE); //PendingIntent.FLAG_IMMUTABLE);
+            
+            // MUST USE explicit intent (working on OnePlus 12R test device) -- other issues, notes here: https://stackoverflow.com/questions/77275691/targeting-u-version-34-and-above-disallows-creating-or-retrieving-a-pendingin
+            Intent explicitIntent = new Intent(ACTION_USB_PERMISSION);
+            explicitIntent.setPackage(this.context.getPackageName()); // .packageName);
+            PendingIntent permissionIntent = PendingIntent.getBroadcast(this.context, 0, explicitIntent, PendingIntent.FLAG_IMMUTABLE);
+                        
+            
             IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
             this.context.registerReceiver(usbReceiver, filter);
 
