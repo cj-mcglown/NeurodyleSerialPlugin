@@ -1,8 +1,3 @@
-// export interface NeurodyneUsbSerialPlugin {
-//   echo(options: { value: string }): Promise<{ value: string }>;
-// }
-
-
 import { PluginListenerHandle } from '@capacitor/core';
 
 export interface UsbSerialOptions {
@@ -46,6 +41,10 @@ export interface NeurodyneUsbSerialPlugin {
   closeSerial(): Promise<void>;
   readSerial(): Promise<{ data: string }>;
   writeSerial(options: { data: string }): Promise<void>;
+  keepAwake(): Promise<void>;
+  allowSleep(): Promise<void>;
+  isSupported(): Promise<IsSupportedResult>;
+  isKeptAwake(): Promise<IsKeptAwakeResult>;
 
   addListener(
     eventName: 'log',
@@ -71,4 +70,12 @@ export interface NeurodyneUsbSerialPlugin {
     eventName: 'error',
     listenerFunc: (data: { error: string }) => void
   ): Promise<PluginListenerHandle> & PluginListenerHandle;
+}
+
+export interface IsSupportedResult {
+  isSupported: boolean;
+}
+
+export interface IsKeptAwakeResult {
+  isKeptAwake: boolean;
 }

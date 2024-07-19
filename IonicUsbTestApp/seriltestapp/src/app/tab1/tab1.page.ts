@@ -113,6 +113,36 @@ export class Tab1Page {
       console.error(error);
     }
   }
+
+  async keepAwake() {
+    await NeurodyneUsbSerial.keepAwake().then( () => {
+      console.log("keeping Awake");
+    });
+
+  }
+
+  async allowSleep() {
+    await NeurodyneUsbSerial.allowSleep().then( () => {
+      console.log("Allowing Awake");
+    });
+
+  }
+
+  async isSupported() {
+    await NeurodyneUsbSerial.isSupported().then( res => {
+      console.log('isSupported Result', res);
+    });
+
+  }
+
+  async isKeptAwake() {
+    await NeurodyneUsbSerial.isKeptAwake().then( res => {
+      console.log("isKepAwake Result", res);
+    });
+
+  }
+
+ 
     // this.serialService.openSerialPort();
   
 }

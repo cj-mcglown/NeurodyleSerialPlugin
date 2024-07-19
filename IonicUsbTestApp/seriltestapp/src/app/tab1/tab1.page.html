@@ -12,6 +12,14 @@
       <ion-title size="large">Tab 1</ion-title>
     </ion-toolbar>
   </ion-header>
+  <button (click)="getPermission()">start</button><br>
+  <button (click)="getPermissionReal()">open serial</button> <br>
+  <button (click)="read()">read</button> <br>
+
+  <button (click)="keepAwake()">Keep Screen Awake</button><br>
+  <button (click)="allowSleep()">Allow Screen Sleep</button> <br>
+  <button (click)="isSupported()">isSupported?</button> <br>
+  <button (click)="isKeptAwake()">isKeptAwake?</button> <br>
   platformReadyValue: {{platformReady}}<br>
   datavals:  {{datavals}}<br>
 
@@ -22,8 +30,10 @@
   {{devicesResponse | json}}
 
 
-  <button (click)="getPermission()">start</button><br>
-  <button (click)="getPermissionReal()">open serial</button> <br>
-  <button (click)="read()">read</button> <br>
+
+
+
+
+
   <!-- <app-explore-container name="Tab 1 page"></app-explore-container> -->
 </ion-content>
