@@ -1,6 +1,6 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { UsbSerialOptions, NeurodyneUsbSerialPlugin, IsKeptAwakeResult, IsSupportedResult } from './definitions';
+import type { UsbSerialOptions, NeurodyneUsbSerialPlugin, IsKeptAwakeResult, IsSupportedResult, GetBrightnessReturnValue, SetBrightnessOptions } from './definitions';
 
 export class NeurodyneUsbSerialWeb extends WebPlugin implements NeurodyneUsbSerialPlugin {
   private wakeLock: WakeLockSentinel | null = null;
@@ -33,6 +33,12 @@ export class NeurodyneUsbSerialWeb extends WebPlugin implements NeurodyneUsbSeri
     return Promise.reject(`Method '${eventName}' not implemented.`) as any;
   }
 
+  setBrightness(options: SetBrightnessOptions): Promise<void> {
+    throw new Error('Method not implemented: ' + JSON.stringify(options));
+  }
+  getBrightness(): Promise<GetBrightnessReturnValue>{
+    throw new Error('Method not implemented: ');
+  }
 
   public async keepAwake(): Promise<void> {
     if (!this._isSupported) {
@@ -73,7 +79,7 @@ export class NeurodyneUsbSerialWeb extends WebPlugin implements NeurodyneUsbSeri
     throw this.unavailable(
       'Screen Wake Lock API not available in this browser.',
     );
-  }
+  } 
 }
 
 

@@ -45,6 +45,19 @@ export interface NeurodyneUsbSerialPlugin {
   allowSleep(): Promise<void>;
   isSupported(): Promise<IsSupportedResult>;
   isKeptAwake(): Promise<IsKeptAwakeResult>;
+  
+//Brightness
+  /**
+ * Sets the brightness level.
+ * @param options Options to set brightness
+ */
+  setBrightness(options: SetBrightnessOptions): Promise<void>;
+  /**
+   * Returns info than contains the current brightness level
+   * * @since 1.0.0
+   */
+  getBrightness(): Promise<GetBrightnessReturnValue>;
+  echo(options: { value: string }): Promise<{ value: string }>;
 
   addListener(
     eventName: 'log',
@@ -72,10 +85,33 @@ export interface NeurodyneUsbSerialPlugin {
   ): Promise<PluginListenerHandle> & PluginListenerHandle;
 }
 
+//Keep Screen On
+
 export interface IsSupportedResult {
   isSupported: boolean;
 }
 
 export interface IsKeptAwakeResult {
   isKeptAwake: boolean;
+}
+
+//Brightness
+export interface SetBrightnessOptions {
+  /**
+   * The level to set the brightness to,
+   * from 0.0 (very dim) to 1.0 (full brightness)
+   * On Android, setting the value to -1 restores the user configured brightness.
+   *
+   * */
+  brightness: number;
+}
+
+export interface GetBrightnessReturnValue {
+  /**
+   * The current brightness level, from 0.0 (very dim) to 1.0 (full brightness)
+   *
+   * On Android it returns -1 if the value has not been changed by the app.
+   *
+   */
+  brightness: number;
 }

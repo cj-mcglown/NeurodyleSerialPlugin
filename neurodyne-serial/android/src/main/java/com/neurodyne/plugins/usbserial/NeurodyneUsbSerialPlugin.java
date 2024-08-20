@@ -1,7 +1,10 @@
 package com.neurodyne.plugins.usbserial;
 
+import android.app.Activity;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
+import android.view.Surface;
+import android.view.SurfaceControl;
 import android.view.Window;
 import android.view.WindowManager;
 import com.getcapacitor.JSObject;
@@ -150,17 +153,6 @@ public class NeurodyneUsbSerialPlugin extends Plugin  implements Callback {
         }
     }
 
-//    @Override
-//    protected void handleOnResume() {
-//        super.handleOnResume();
-//        implementation.onResume();
-//    }
-//
-//    @Override
-//    protected void handleOnPause() {
-//        implementation.onPause();
-//        super.handleOnPause();
-//    }
 
     @Override
     public void log(String TAG, String text) {
@@ -294,6 +286,35 @@ public class NeurodyneUsbSerialPlugin extends Plugin  implements Callback {
                 );
     }
 
+    // Screen Brightness
+    @PluginMethod
+    public void setBrightness(PluginCall call) {
+        Float brightness = call.getFloat("brightness");
+        Activity activity = getActivity();
+        WindowManager.LayoutParams layoutParams = activity.getWindow().getAttributes();
+
+        activity.runOnUiThread(
+                () -> {
+                    layoutParams.screenBrightness = brightness;
+                    activity.getWindow().setAttributes(layoutParams);
+                    call.resolve();
+                }
+        );
+    }
+
+    @PluginMethod
+    public void getBrightness(PluginCall call) {
+        WindowManager.LayoutParams layoutParams = getActivity().getWindow().getAttributes();
+        JSObject ret = new JSObject();
+        call.resolve(
+                new JSObject() {
+                    {
+                        put("brightness", layoutParams.screenBrightness);
+                    }
+                }
+        );
+    }
+
     @PluginMethod
     public void echo(PluginCall call) {
         String value = call.getString("value");
@@ -302,7 +323,6 @@ public class NeurodyneUsbSerialPlugin extends Plugin  implements Callback {
         ret.put("value", implementation.echo(value));
         call.resolve(ret);
     }
-
 
 
 }
